@@ -1,38 +1,229 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useProfile } from "@/lib/profile-context";
+import { INDUSTRY_LABELS, COMPANY_SIZE_LABELS, WORK_STYLE_LABELS } from "@/lib/labels";
+import { IndustryEnum, CompanySizeEnum, WorkStyleEnum } from "@/lib/types";
+import type { SurveyData, Industry, CompanySize, WorkStyle } from "@/lib/types";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { 
-  GraduationCap, 
-  Briefcase, 
-  Target, 
-  MapPin, 
-  Settings, 
-  Pencil, 
-  Check, 
+import {
+  GraduationCap,
+  Briefcase,
+  Target,
+  MapPin,
+  Settings,
+  Pencil,
+  Check,
   X,
-  RefreshCw
+  Plus,
+  RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type EditingSection = "education" | "industry" | "goals" | "constraints" | "preferences" | null;
 
+type EducationForm = {
+  university: string;
+  course: string;
+  year: string;
+  gpa: string;
+};
+
+// Shared label styling: matches the original muted, normal-weight field labels
+// (the Label primitive defaults to font-medium, which we override here).
+const FIELD_LABEL = "text-sm font-normal text-muted-foreground";
+const CHIP_DASHED =
+  "inline-flex items-center gap-1 rounded-full border-2 border-dashed border-border text-muted-foreground transition-colors hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
+/** The Modifica / Annulla+Salva control shared by every section. */
+function SectionEditBar({
+  editing,
+  onEdit,
+  onCancel,
+  onSave,
+}: {
+  editing: boolean;
+  onEdit: () => void;
+  onCancel: () => void;
+  onSave: () => void;
+}) {
+  return (
+    <div className="mb-4 flex justify-end">
+      {editing ? (
+        <div className="flex gap-2">
+          <Button size="sm" variant="ghost" onClick={onCancel}>
+            <X className="mr-1 h-4 w-4" /> Annulla
+          </Button>
+          <Button size="sm" onClick={onSave}>
+            <Check className="mr-1 h-4 w-4" /> Salva
+          </Button>
+        </div>
+      ) : (
+        <Button size="sm" variant="outline" onClick={onEdit}>
+          <Pencil className="mr-1 h-4 w-4" /> Modifica
+        </Button>
+      )}
+    </div>
+  );
+}
+
+/** A pill that can carry an accessible remove button while editing. */
+function RemovableChip({
+  className,
+  removable,
+  onRemove,
+  removeLabel,
+  children,
+}: {
+  className?: string;
+  removable?: boolean;
+  onRemove?: () => void;
+  removeLabel?: string;
+  children: ReactNode;
+}) {
+  return (
+    <span className={cn("inline-flex items-center", className)}>
+      {children}
+      {removable && (
+        <button
+          type="button"
+          onClick={onRemove}
+          aria-label={removeLabel}
+          className="ml-1.5 -mr-1 inline-flex items-center rounded-full opacity-70 transition-opacity hover:text-destructive hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <X className="h-3 w-3" />
+        </button>
+      )}
+    </span>
+  );
+}
+
+/** "+ Aggiungi" for fixed-vocabulary fields: a menu of the not-yet-picked options. */
+function EnumChipAdder<T extends string>({
+  options,
+  selected,
+  labels,
+  onAdd,
+  triggerClassName,
+}: {
+  options: readonly T[];
+  selected: readonly T[];
+  labels: Record<T, string>;
+  onAdd: (value: T) => void;
+  triggerClassName?: string;
+}) {
+  const remaining = options.filter((opt) => !selected.includes(opt));
+  if (remaining.length === 0) return null;
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button type="button" className={cn(CHIP_DASHED, triggerClassName)}>
+          <Plus className="h-3 w-3" /> Aggiungi
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="max-h-64 overflow-y-auto">
+        {remaining.map((opt) => (
+          <DropdownMenuItem key={opt} onSelect={() => onAdd(opt)}>
+            {labels[opt]}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+/** "+ Aggiungi" for free-text lists: reveals an inline input that commits on Enter/blur. */
+function TextChipAdder({
+  onAdd,
+  placeholder,
+  triggerClassName,
+}: {
+  onAdd: (value: string) => void;
+  placeholder: string;
+  triggerClassName?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [value, setValue] = useState("");
+
+  const commit = () => {
+    const trimmed = value.trim();
+    if (trimmed) onAdd(trimmed);
+    setValue("");
+    setOpen(false);
+  };
+
+  if (open) {
+    return (
+      <Input
+        autoFocus
+        value={value}
+        placeholder={placeholder}
+        aria-label={placeholder}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            commit();
+          } else if (e.key === "Escape") {
+            setValue("");
+            setOpen(false);
+          }
+        }}
+        onBlur={commit}
+        className="h-7 w-40 rounded-full px-3 text-xs"
+      />
+    );
+  }
+
+  return (
+    <button type="button" onClick={() => setOpen(true)} className={cn(CHIP_DASHED, triggerClassName)}>
+      <Plus className="h-3 w-3" /> Aggiungi
+    </button>
+  );
+}
+
 export function ProfilePage() {
-  const { currentProfile } = useProfile();
+  const { current } = useProfile();
+  const profile = current.profile;
+  const survey = current.survey;
+  // Education is anagrafica: it lives on the profile, while GPA is read off the
+  // active CV's parsed data (the survey schema has no education block).
+  const initialEducation: EducationForm = {
+    university: profile.university ?? "",
+    course: profile.course ?? "",
+    year: profile.year ?? "",
+    gpa: current.activeCv?.cv.parsed_data?.education[0]?.gpa ?? "",
+  };
+
   const [editingSection, setEditingSection] = useState<EditingSection>(null);
   const [showRegenerateBanner, setShowRegenerateBanner] = useState(false);
 
   // Local state for form editing (mock - doesn't actually persist)
-  const [formData, setFormData] = useState(currentProfile.surveyData);
+  const [formData, setFormData] = useState<SurveyData | null>(survey);
+  const [eduForm, setEduForm] = useState<EducationForm>(initialEducation);
 
   const handleSave = () => {
     setEditingSection(null);
@@ -40,17 +231,97 @@ export function ProfilePage() {
   };
 
   const handleCancel = () => {
-    setFormData(currentProfile.surveyData);
+    setFormData(survey);
+    setEduForm(initialEducation);
     setEditingSection(null);
   };
+
+  if (!formData) {
+    return (
+      <div className="text-muted-foreground">Nessun questionario di profilo disponibile.</div>
+    );
+  }
+
+  // Local list editors. Edits live in component state and reset on Annulla or
+  // profile switch, mirroring how the text fields above behave.
+  const addIndustry = (value: Industry) =>
+    setFormData({ ...formData, industry_interests: [...formData.industry_interests, value] });
+  const removeIndustry = (index: number) =>
+    setFormData({
+      ...formData,
+      industry_interests: formData.industry_interests.filter((_, i) => i !== index),
+    });
+
+  const addLocation = (value: string) =>
+    setFormData({
+      ...formData,
+      constraints: {
+        ...formData.constraints,
+        geographic_availability: [...formData.constraints.geographic_availability, value],
+      },
+    });
+  const removeLocation = (index: number) =>
+    setFormData({
+      ...formData,
+      constraints: {
+        ...formData.constraints,
+        geographic_availability: formData.constraints.geographic_availability.filter(
+          (_, i) => i !== index,
+        ),
+      },
+    });
+
+  const addCompanySize = (value: CompanySize) =>
+    setFormData({
+      ...formData,
+      work_preferences: {
+        ...formData.work_preferences,
+        company_size: [...formData.work_preferences.company_size, value],
+      },
+    });
+  const removeCompanySize = (index: number) =>
+    setFormData({
+      ...formData,
+      work_preferences: {
+        ...formData.work_preferences,
+        company_size: formData.work_preferences.company_size.filter((_, i) => i !== index),
+      },
+    });
+
+  const addLanguage = (value: string) =>
+    setFormData({
+      ...formData,
+      work_preferences: {
+        ...formData.work_preferences,
+        work_languages: [...formData.work_preferences.work_languages, value],
+      },
+    });
+  const removeLanguage = (index: number) =>
+    setFormData({
+      ...formData,
+      work_preferences: {
+        ...formData.work_preferences,
+        work_languages: formData.work_preferences.work_languages.filter((_, i) => i !== index),
+      },
+    });
+
+  const setWorkStyle = (value: WorkStyle | null) =>
+    setFormData({
+      ...formData,
+      work_preferences: { ...formData.work_preferences, work_style: value },
+    });
+
+  const editingIndustry = editingSection === "industry";
+  const editingConstraints = editingSection === "constraints";
+  const editingPreferences = editingSection === "preferences";
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-semibold text-foreground">Profile</h1>
+        <h1 className="text-2xl font-semibold text-foreground">Profilo</h1>
         <p className="mt-1 text-muted-foreground">
-          Your career preferences and goals. This data powers our personalized recommendations.
+          Le tue preferenze e i tuoi obiettivi di carriera. Questi dati alimentano i nostri consigli personalizzati.
         </p>
       </div>
 
@@ -60,14 +331,14 @@ export function ProfilePage() {
           <div className="flex items-center gap-3">
             <RefreshCw className="h-5 w-5 text-primary" />
             <div>
-              <div className="font-medium text-foreground">Profile updated</div>
+              <div className="font-medium text-foreground">Profilo aggiornato</div>
               <div className="text-sm text-muted-foreground">
-                Regenerate your analysis to see updated recommendations based on your changes.
+                Rigenera l&apos;analisi per vedere consigli aggiornati in base alle tue modifiche.
               </div>
             </div>
           </div>
           <Button onClick={() => setShowRegenerateBanner(false)}>
-            Regenerate Analysis
+            Rigenera analisi
           </Button>
         </Card>
       )}
@@ -81,86 +352,68 @@ export function ProfilePage() {
               <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
                 <GraduationCap className="h-5 w-5 text-primary" />
               </div>
-              <span className="font-semibold">Education</span>
+              <span className="font-semibold">Formazione</span>
             </div>
           </AccordionTrigger>
           <AccordionContent className="pb-4">
-            <div className="flex justify-end mb-4">
-              {editingSection === "education" ? (
-                <div className="flex gap-2">
-                  <Button size="sm" variant="ghost" onClick={handleCancel}>
-                    <X className="mr-1 h-4 w-4" /> Cancel
-                  </Button>
-                  <Button size="sm" onClick={handleSave}>
-                    <Check className="mr-1 h-4 w-4" /> Save
-                  </Button>
-                </div>
-              ) : (
-                <Button size="sm" variant="outline" onClick={() => setEditingSection("education")}>
-                  <Pencil className="mr-1 h-4 w-4" /> Edit
-                </Button>
-              )}
-            </div>
+            <SectionEditBar
+              editing={editingSection === "education"}
+              onEdit={() => setEditingSection("education")}
+              onCancel={handleCancel}
+              onSave={handleSave}
+            />
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <label className="text-sm text-muted-foreground">University</label>
+                <Label htmlFor="edu-university" className={FIELD_LABEL}>Università</Label>
                 {editingSection === "education" ? (
-                  <Input 
-                    className="mt-1" 
-                    value={formData.education.university}
-                    onChange={(e) => setFormData({
-                      ...formData,
-                      education: { ...formData.education, university: e.target.value }
-                    })}
+                  <Input
+                    id="edu-university"
+                    className="mt-1"
+                    value={eduForm.university}
+                    onChange={(e) => setEduForm({ ...eduForm, university: e.target.value })}
                   />
                 ) : (
-                  <div className="mt-1 font-medium text-foreground">{formData.education.university}</div>
+                  <div className="mt-1 font-medium break-words text-foreground">{eduForm.university || "—"}</div>
                 )}
               </div>
               <div>
-                <label className="text-sm text-muted-foreground">Course</label>
+                <Label htmlFor="edu-course" className={FIELD_LABEL}>Corso</Label>
                 {editingSection === "education" ? (
-                  <Input 
-                    className="mt-1" 
-                    value={formData.education.course}
-                    onChange={(e) => setFormData({
-                      ...formData,
-                      education: { ...formData.education, course: e.target.value }
-                    })}
+                  <Input
+                    id="edu-course"
+                    className="mt-1"
+                    value={eduForm.course}
+                    onChange={(e) => setEduForm({ ...eduForm, course: e.target.value })}
                   />
                 ) : (
-                  <div className="mt-1 font-medium text-foreground">{formData.education.course}</div>
+                  <div className="mt-1 font-medium break-words text-foreground">{eduForm.course || "—"}</div>
                 )}
               </div>
               <div>
-                <label className="text-sm text-muted-foreground">Year</label>
+                <Label htmlFor="edu-year" className={FIELD_LABEL}>Anno</Label>
                 {editingSection === "education" ? (
-                  <Input 
-                    className="mt-1" 
-                    value={formData.education.year}
-                    onChange={(e) => setFormData({
-                      ...formData,
-                      education: { ...formData.education, year: e.target.value }
-                    })}
+                  <Input
+                    id="edu-year"
+                    className="mt-1"
+                    value={eduForm.year}
+                    onChange={(e) => setEduForm({ ...eduForm, year: e.target.value })}
                   />
                 ) : (
-                  <div className="mt-1 font-medium text-foreground">{formData.education.year}</div>
+                  <div className="mt-1 font-medium break-words text-foreground">{eduForm.year || "—"}</div>
                 )}
               </div>
-              {formData.education.gpa && (
+              {eduForm.gpa && (
                 <div>
-                  <label className="text-sm text-muted-foreground">GPA</label>
+                  <Label htmlFor="edu-gpa" className={FIELD_LABEL}>GPA</Label>
                   {editingSection === "education" ? (
-                    <Input 
-                      className="mt-1" 
-                      value={formData.education.gpa || ""}
-                      onChange={(e) => setFormData({
-                        ...formData,
-                        education: { ...formData.education, gpa: e.target.value }
-                      })}
+                    <Input
+                      id="edu-gpa"
+                      className="mt-1"
+                      value={eduForm.gpa}
+                      onChange={(e) => setEduForm({ ...eduForm, gpa: e.target.value })}
                     />
                   ) : (
-                    <div className="mt-1 font-medium text-foreground">{formData.education.gpa}</div>
+                    <div className="mt-1 font-medium break-words text-foreground">{eduForm.gpa}</div>
                   )}
                 </div>
               )}
@@ -175,47 +428,44 @@ export function ProfilePage() {
               <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
                 <Briefcase className="h-5 w-5 text-primary" />
               </div>
-              <span className="font-semibold">Industry Interests</span>
+              <span className="font-semibold">Settori di interesse</span>
             </div>
           </AccordionTrigger>
           <AccordionContent className="pb-4">
-            <div className="flex justify-end mb-4">
-              {editingSection === "industry" ? (
-                <div className="flex gap-2">
-                  <Button size="sm" variant="ghost" onClick={handleCancel}>
-                    <X className="mr-1 h-4 w-4" /> Cancel
-                  </Button>
-                  <Button size="sm" onClick={handleSave}>
-                    <Check className="mr-1 h-4 w-4" /> Save
-                  </Button>
-                </div>
-              ) : (
-                <Button size="sm" variant="outline" onClick={() => setEditingSection("industry")}>
-                  <Pencil className="mr-1 h-4 w-4" /> Edit
-                </Button>
+            <SectionEditBar
+              editing={editingIndustry}
+              onEdit={() => setEditingSection("industry")}
+              onCancel={handleCancel}
+              onSave={handleSave}
+            />
+            <div role="group" aria-label="Settori di interesse" className="flex flex-wrap gap-2">
+              {formData.industry_interests.length === 0 && !editingIndustry && (
+                <span className="text-sm text-muted-foreground">Nessun settore selezionato.</span>
               )}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {formData.industryInterests.map((industry, i) => (
-                <span 
-                  key={i} 
+              {formData.industry_interests.map((industry, i) => (
+                <RemovableChip
+                  key={industry}
                   className={cn(
                     "rounded-full px-3 py-1.5 text-sm font-medium",
-                    editingSection === "industry" 
-                      ? "bg-primary text-primary-foreground cursor-pointer" 
-                      : "bg-secondary text-secondary-foreground"
+                    editingIndustry
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-secondary text-secondary-foreground",
                   )}
+                  removable={editingIndustry}
+                  onRemove={() => removeIndustry(i)}
+                  removeLabel={`Rimuovi ${INDUSTRY_LABELS[industry]}`}
                 >
-                  {industry}
-                  {editingSection === "industry" && (
-                    <button className="ml-2 hover:text-destructive">&times;</button>
-                  )}
-                </span>
+                  {INDUSTRY_LABELS[industry]}
+                </RemovableChip>
               ))}
-              {editingSection === "industry" && (
-                <button className="rounded-full border-2 border-dashed border-border px-3 py-1.5 text-sm text-muted-foreground hover:border-primary hover:text-primary">
-                  + Add
-                </button>
+              {editingIndustry && (
+                <EnumChipAdder
+                  options={IndustryEnum.options}
+                  selected={formData.industry_interests}
+                  labels={INDUSTRY_LABELS}
+                  onAdd={addIndustry}
+                  triggerClassName="px-3 py-1.5 text-sm"
+                />
               )}
             </div>
           </AccordionContent>
@@ -228,73 +478,66 @@ export function ProfilePage() {
               <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
                 <Target className="h-5 w-5 text-primary" />
               </div>
-              <span className="font-semibold">Career Goals</span>
+              <span className="font-semibold">Obiettivi di carriera</span>
             </div>
           </AccordionTrigger>
           <AccordionContent className="pb-4">
-            <div className="flex justify-end mb-4">
-              {editingSection === "goals" ? (
-                <div className="flex gap-2">
-                  <Button size="sm" variant="ghost" onClick={handleCancel}>
-                    <X className="mr-1 h-4 w-4" /> Cancel
-                  </Button>
-                  <Button size="sm" onClick={handleSave}>
-                    <Check className="mr-1 h-4 w-4" /> Save
-                  </Button>
-                </div>
-              ) : (
-                <Button size="sm" variant="outline" onClick={() => setEditingSection("goals")}>
-                  <Pencil className="mr-1 h-4 w-4" /> Edit
-                </Button>
-              )}
-            </div>
+            <SectionEditBar
+              editing={editingSection === "goals"}
+              onEdit={() => setEditingSection("goals")}
+              onCancel={handleCancel}
+              onSave={handleSave}
+            />
             <div className="space-y-4">
               <div>
-                <label className="text-sm text-muted-foreground">1-Year Goal</label>
+                <Label htmlFor="goal-one-year" className={FIELD_LABEL}>Obiettivo a 1 anno</Label>
                 {editingSection === "goals" ? (
-                  <textarea 
-                    className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  <Textarea
+                    id="goal-one-year"
+                    className="mt-1"
                     rows={2}
-                    value={formData.careerGoals.oneYear}
+                    value={formData.career_goals.one_year_goal}
                     onChange={(e) => setFormData({
                       ...formData,
-                      careerGoals: { ...formData.careerGoals, oneYear: e.target.value }
+                      career_goals: { ...formData.career_goals, one_year_goal: e.target.value }
                     })}
                   />
                 ) : (
-                  <div className="mt-1 text-foreground">{formData.careerGoals.oneYear}</div>
+                  <div className="mt-1 break-words text-foreground">{formData.career_goals.one_year_goal || "—"}</div>
                 )}
               </div>
               <div>
-                <label className="text-sm text-muted-foreground">3-Year Goal</label>
+                <Label htmlFor="goal-three-year" className={FIELD_LABEL}>Obiettivo a 3 anni</Label>
                 {editingSection === "goals" ? (
-                  <textarea 
-                    className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  <Textarea
+                    id="goal-three-year"
+                    className="mt-1"
                     rows={2}
-                    value={formData.careerGoals.threeYear}
+                    value={formData.career_goals.three_year_goal}
                     onChange={(e) => setFormData({
                       ...formData,
-                      careerGoals: { ...formData.careerGoals, threeYear: e.target.value }
+                      career_goals: { ...formData.career_goals, three_year_goal: e.target.value }
                     })}
                   />
                 ) : (
-                  <div className="mt-1 text-foreground">{formData.careerGoals.threeYear}</div>
+                  <div className="mt-1 break-words text-foreground">{formData.career_goals.three_year_goal || "—"}</div>
                 )}
               </div>
               <div>
-                <label className="text-sm text-muted-foreground">What I {"Don't"} Want</label>
+                <Label htmlFor="goal-avoid" className={FIELD_LABEL}>Cosa non voglio</Label>
                 {editingSection === "goals" ? (
-                  <textarea 
-                    className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  <Textarea
+                    id="goal-avoid"
+                    className="mt-1"
                     rows={2}
-                    value={formData.careerGoals.avoid}
+                    value={formData.career_goals.what_i_dont_want ?? ""}
                     onChange={(e) => setFormData({
                       ...formData,
-                      careerGoals: { ...formData.careerGoals, avoid: e.target.value }
+                      career_goals: { ...formData.career_goals, what_i_dont_want: e.target.value }
                     })}
                   />
                 ) : (
-                  <div className="mt-1 text-foreground">{formData.careerGoals.avoid}</div>
+                  <div className="mt-1 break-words text-foreground">{formData.career_goals.what_i_dont_want ?? "—"}</div>
                 )}
               </div>
             </div>
@@ -308,66 +551,77 @@ export function ProfilePage() {
               <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
                 <MapPin className="h-5 w-5 text-primary" />
               </div>
-              <span className="font-semibold">Constraints</span>
+              <span className="font-semibold">Vincoli</span>
             </div>
           </AccordionTrigger>
           <AccordionContent className="pb-4">
-            <div className="flex justify-end mb-4">
-              {editingSection === "constraints" ? (
-                <div className="flex gap-2">
-                  <Button size="sm" variant="ghost" onClick={handleCancel}>
-                    <X className="mr-1 h-4 w-4" /> Cancel
-                  </Button>
-                  <Button size="sm" onClick={handleSave}>
-                    <Check className="mr-1 h-4 w-4" /> Save
-                  </Button>
-                </div>
-              ) : (
-                <Button size="sm" variant="outline" onClick={() => setEditingSection("constraints")}>
-                  <Pencil className="mr-1 h-4 w-4" /> Edit
-                </Button>
-              )}
-            </div>
+            <SectionEditBar
+              editing={editingConstraints}
+              onEdit={() => setEditingSection("constraints")}
+              onCancel={handleCancel}
+              onSave={handleSave}
+            />
             <div className="grid gap-4 sm:grid-cols-3">
               <div>
-                <label className="text-sm text-muted-foreground">Geographic Availability</label>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {formData.constraints.geographic.map((loc, i) => (
-                    <span key={i} className="rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground">
+                <Label id="constraints-geo-label" className={FIELD_LABEL}>Disponibilità geografica</Label>
+                <div
+                  role="group"
+                  aria-labelledby="constraints-geo-label"
+                  className="mt-2 flex flex-wrap gap-2"
+                >
+                  {formData.constraints.geographic_availability.length === 0 && !editingConstraints && (
+                    <span className="text-sm text-muted-foreground">—</span>
+                  )}
+                  {formData.constraints.geographic_availability.map((loc, i) => (
+                    <RemovableChip
+                      key={i}
+                      className="rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground"
+                      removable={editingConstraints}
+                      onRemove={() => removeLocation(i)}
+                      removeLabel={`Rimuovi ${loc}`}
+                    >
                       {loc}
-                    </span>
+                    </RemovableChip>
                   ))}
+                  {editingConstraints && (
+                    <TextChipAdder
+                      onAdd={addLocation}
+                      placeholder="Aggiungi località"
+                      triggerClassName="px-2.5 py-1 text-xs"
+                    />
+                  )}
                 </div>
               </div>
               <div>
-                <label className="text-sm text-muted-foreground">Weekly Study Hours</label>
-                {editingSection === "constraints" ? (
-                  <Input 
-                    type="number"
-                    className="mt-1" 
-                    value={formData.constraints.weeklyHours}
+                <Label htmlFor="constraints-hours" className={FIELD_LABEL}>Ore di studio settimanali</Label>
+                {editingConstraints ? (
+                  <Input
+                    id="constraints-hours"
+                    className="mt-1"
+                    value={formData.constraints.weekly_study_hours ?? ""}
                     onChange={(e) => setFormData({
                       ...formData,
-                      constraints: { ...formData.constraints, weeklyHours: parseInt(e.target.value) || 0 }
+                      constraints: { ...formData.constraints, weekly_study_hours: e.target.value }
                     })}
                   />
                 ) : (
-                  <div className="mt-1 font-medium text-foreground">{formData.constraints.weeklyHours} hours</div>
+                  <div className="mt-1 font-medium break-words text-foreground">{formData.constraints.weekly_study_hours ?? "—"}</div>
                 )}
               </div>
               <div>
-                <label className="text-sm text-muted-foreground">Training Budget</label>
-                {editingSection === "constraints" ? (
-                  <Input 
-                    className="mt-1" 
-                    value={formData.constraints.budget}
+                <Label htmlFor="constraints-budget" className={FIELD_LABEL}>Budget per la formazione</Label>
+                {editingConstraints ? (
+                  <Input
+                    id="constraints-budget"
+                    className="mt-1"
+                    value={formData.constraints.training_budget ?? ""}
                     onChange={(e) => setFormData({
                       ...formData,
-                      constraints: { ...formData.constraints, budget: e.target.value }
+                      constraints: { ...formData.constraints, training_budget: e.target.value }
                     })}
                   />
                 ) : (
-                  <div className="mt-1 font-medium text-foreground">{formData.constraints.budget}</div>
+                  <div className="mt-1 font-medium break-words text-foreground">{formData.constraints.training_budget ?? "—"}</div>
                 )}
               </div>
             </div>
@@ -381,50 +635,105 @@ export function ProfilePage() {
               <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
                 <Settings className="h-5 w-5 text-primary" />
               </div>
-              <span className="font-semibold">Work Preferences</span>
+              <span className="font-semibold">Preferenze di lavoro</span>
             </div>
           </AccordionTrigger>
           <AccordionContent className="pb-4">
-            <div className="flex justify-end mb-4">
-              {editingSection === "preferences" ? (
-                <div className="flex gap-2">
-                  <Button size="sm" variant="ghost" onClick={handleCancel}>
-                    <X className="mr-1 h-4 w-4" /> Cancel
-                  </Button>
-                  <Button size="sm" onClick={handleSave}>
-                    <Check className="mr-1 h-4 w-4" /> Save
-                  </Button>
-                </div>
-              ) : (
-                <Button size="sm" variant="outline" onClick={() => setEditingSection("preferences")}>
-                  <Pencil className="mr-1 h-4 w-4" /> Edit
-                </Button>
-              )}
-            </div>
+            <SectionEditBar
+              editing={editingPreferences}
+              onEdit={() => setEditingSection("preferences")}
+              onCancel={handleCancel}
+              onSave={handleSave}
+            />
             <div className="grid gap-4 sm:grid-cols-3">
               <div>
-                <label className="text-sm text-muted-foreground">Company Size</label>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {formData.preferences.companySize.map((size, i) => (
-                    <span key={i} className="rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground">
-                      {size}
-                    </span>
+                <Label id="prefs-size-label" className={FIELD_LABEL}>Dimensione azienda</Label>
+                <div
+                  role="group"
+                  aria-labelledby="prefs-size-label"
+                  className="mt-2 flex flex-wrap gap-2"
+                >
+                  {formData.work_preferences.company_size.length === 0 && !editingPreferences && (
+                    <span className="text-sm text-muted-foreground">—</span>
+                  )}
+                  {formData.work_preferences.company_size.map((size, i) => (
+                    <RemovableChip
+                      key={size}
+                      className="rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground"
+                      removable={editingPreferences}
+                      onRemove={() => removeCompanySize(i)}
+                      removeLabel={`Rimuovi ${COMPANY_SIZE_LABELS[size]}`}
+                    >
+                      {COMPANY_SIZE_LABELS[size]}
+                    </RemovableChip>
                   ))}
+                  {editingPreferences && (
+                    <EnumChipAdder
+                      options={CompanySizeEnum.options}
+                      selected={formData.work_preferences.company_size}
+                      labels={COMPANY_SIZE_LABELS}
+                      onAdd={addCompanySize}
+                      triggerClassName="px-2.5 py-1 text-xs"
+                    />
+                  )}
                 </div>
               </div>
               <div>
-                <label className="text-sm text-muted-foreground">Work Languages</label>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {formData.preferences.workLanguage.map((lang, i) => (
-                    <span key={i} className="rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground">
+                <Label id="prefs-lang-label" className={FIELD_LABEL}>Lingue di lavoro</Label>
+                <div
+                  role="group"
+                  aria-labelledby="prefs-lang-label"
+                  className="mt-2 flex flex-wrap gap-2"
+                >
+                  {formData.work_preferences.work_languages.length === 0 && !editingPreferences && (
+                    <span className="text-sm text-muted-foreground">—</span>
+                  )}
+                  {formData.work_preferences.work_languages.map((lang, i) => (
+                    <RemovableChip
+                      key={i}
+                      className="rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground"
+                      removable={editingPreferences}
+                      onRemove={() => removeLanguage(i)}
+                      removeLabel={`Rimuovi ${lang}`}
+                    >
                       {lang}
-                    </span>
+                    </RemovableChip>
                   ))}
+                  {editingPreferences && (
+                    <TextChipAdder
+                      onAdd={addLanguage}
+                      placeholder="Aggiungi lingua"
+                      triggerClassName="px-2.5 py-1 text-xs"
+                    />
+                  )}
                 </div>
               </div>
               <div>
-                <label className="text-sm text-muted-foreground">Work Style</label>
-                <div className="mt-1 font-medium text-foreground">{formData.preferences.workStyle}</div>
+                <Label htmlFor="prefs-workstyle" className={FIELD_LABEL}>Modalità di lavoro</Label>
+                {editingPreferences ? (
+                  <Select
+                    value={formData.work_preferences.work_style ?? "flexible"}
+                    onValueChange={(v) => setWorkStyle(v === "flexible" ? null : (v as WorkStyle))}
+                  >
+                    <SelectTrigger id="prefs-workstyle" className="mt-1 w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="flexible">Flessibile</SelectItem>
+                      {WorkStyleEnum.options.map((ws) => (
+                        <SelectItem key={ws} value={ws}>
+                          {WORK_STYLE_LABELS[ws]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <div className="mt-1 font-medium text-foreground">
+                    {formData.work_preferences.work_style
+                      ? WORK_STYLE_LABELS[formData.work_preferences.work_style]
+                      : "Flessibile"}
+                  </div>
+                )}
               </div>
             </div>
           </AccordionContent>

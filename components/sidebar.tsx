@@ -4,18 +4,20 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LayoutDashboard, FileText, User, MessageCircle } from "lucide-react";
 import { useProfile } from "@/lib/profile-context";
+import { targetRoleLabel } from "@/lib/labels";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { href: "/", icon: LayoutDashboard, label: "Dashboard" },
-  { href: "/cvs", icon: FileText, label: "My CVs" },
-  { href: "/profile", icon: User, label: "Profile" },
+  { href: "/cvs", icon: FileText, label: "I miei CV" },
+  { href: "/profile", icon: User, label: "Profilo" },
   { href: "/mentor", icon: MessageCircle, label: "Mentor" },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { currentProfile } = useProfile();
+  const { current } = useProfile();
+  const careerScore = current.careerScore;
 
   return (
     <aside className="fixed left-0 top-0 z-30 flex h-full w-64 flex-col border-r border-border bg-card">
@@ -57,22 +59,22 @@ export function Sidebar() {
       <div className="border-t border-border p-4">
         <div className="rounded-lg bg-muted p-4">
           <div className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Career Score
+            Punteggio Carriera
           </div>
           <div className="flex items-baseline gap-1">
             <span className="text-3xl font-semibold text-foreground">
-              {currentProfile.careerScore}
+              {careerScore ?? "—"}
             </span>
             <span className="text-lg text-muted-foreground">/100</span>
           </div>
           <div className="mt-3 h-2 overflow-hidden rounded-full bg-border">
             <div
               className="h-full rounded-full bg-primary transition-all duration-500"
-              style={{ width: `${currentProfile.careerScore}%` }}
+              style={{ width: `${careerScore ?? 0}%` }}
             />
           </div>
           <p className="mt-2 text-xs text-muted-foreground">
-            Targeting: {currentProfile.targetRole}
+            Obiettivo: {targetRoleLabel(current.profile.target_role)}
           </p>
         </div>
       </div>

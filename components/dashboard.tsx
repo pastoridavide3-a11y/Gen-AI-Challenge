@@ -1,8 +1,11 @@
 "use client";
 
 import { useProfile } from "@/lib/profile-context";
+import { targetRoleLabel, PRIORITY_LABELS } from "@/lib/labels";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { ScoreRing } from "@/components/score-ring";
+import { Reveal } from "@/components/reveal";
 import {
   RadarChart,
   PolarGrid,
@@ -16,141 +19,238 @@ import {
   YAxis,
   Tooltip,
 } from "recharts";
-import { TrendingUp, TrendingDown, BookOpen, Target, MessageCircle, FileText, User, Zap, ArrowRight } from "lucide-react";
+import {
+  TrendingUp,
+  TrendingDown,
+  BookOpen,
+  Target,
+  MessageCircle,
+  FileText,
+  Award,
+  Users,
+  Zap,
+  ArrowRight,
+  Check,
+  Flag,
+  Clock,
+  BadgeCheck,
+  GraduationCap,
+} from "lucide-react";
 import Link from "next/link";
+import type { LearningPath, ActionType, Priority } from "@/lib/types";
+import type { ActivityType } from "@/lib/db/rows";
+import { cn } from "@/lib/utils";
+
+const PRIORITY_ORDER: Record<Priority, number> = {
+  high: 0,
+  medium: 1,
+  low: 2,
+};
+
+const PRIORITY_STYLES: Record<Priority, string> = {
+  high: "border-warning/30 bg-warning/10 text-warning-foreground",
+  medium: "border-info/30 bg-info/10 text-info",
+  low: "border-border bg-muted text-muted-foreground",
+};
+
+function PriorityPill({ priority }: { priority: Priority }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium",
+        PRIORITY_STYLES[priority],
+      )}
+    >
+      <Flag className="h-2.5 w-2.5" />
+      {PRIORITY_LABELS[priority]}
+    </span>
+  );
+}
 
 export function Dashboard() {
-  const { currentProfile } = useProfile();
+  const { current } = useProfile();
+  const { profile, careerScore, scoreBreakdown, scoreHistory, latestAnalysis, recentActivity } =
+    current;
 
-  const radarData = [
-    { dimension: "Completeness", value: currentProfile.scoreBreakdown.completeness, fullMark: 100 },
-    { dimension: "Action & Impact", value: currentProfile.scoreBreakdown.actionImpact, fullMark: 100 },
-    { dimension: "Market Fit", value: currentProfile.scoreBreakdown.marketFit, fullMark: 100 },
-    { dimension: "Clarity", value: currentProfile.scoreBreakdown.clarity, fullMark: 100 },
-    { dimension: "Relevance", value: currentProfile.scoreBreakdown.relevance, fullMark: 100 },
-  ];
+  const radarData = scoreBreakdown
+    ? [
+        { dimension: "Completezza", value: scoreBreakdown.completeness, fullMark: 100 },
+        { dimension: "Azione e impatto", value: scoreBreakdown.action_impact, fullMark: 100 },
+        { dimension: "Aderenza al mercato", value: scoreBreakdown.market_fit, fullMark: 100 },
+        { dimension: "Chiarezza", value: scoreBreakdown.clarity, fullMark: 100 },
+        { dimension: "Rilevanza", value: scoreBreakdown.relevance, fullMark: 100 },
+      ]
+    : [];
 
-  const scoreChange = currentProfile.scoreHistory.length > 1
-    ? currentProfile.careerScore - currentProfile.scoreHistory[currentProfile.scoreHistory.length - 2].score
-    : 0;
+  const scoreChange =
+    scoreHistory.length > 1
+      ? scoreHistory[scoreHistory.length - 1].score - scoreHistory[scoreHistory.length - 2].score
+      : 0;
 
-  const getActivityIcon = (type: string) => {
+  const strengths = latestAnalysis?.formal_evaluation?.strengths ?? [];
+  const gaps = latestAnalysis?.gap_analysis?.gaps ?? [];
+  const nextActions = topActions(latestAnalysis?.learning_path ?? null);
+
+  const getActivityIcon = (type: ActivityType) => {
     switch (type) {
-      case "cv_upload": return FileText;
-      case "mentor_chat": return MessageCircle;
-      case "profile_update": return User;
-      case "score_change": return TrendingUp;
-      default: return Zap;
+      case "cv_upload":
+        return FileText;
+      case "mentor_chat":
+        return MessageCircle;
+      case "analysis":
+        return TrendingUp;
+      default:
+        return Zap;
     }
   };
 
-  const getActionIcon = (type: string) => {
+  const getActionIcon = (type: ActionType) => {
     switch (type) {
-      case "learning": return BookOpen;
-      case "skill": return Target;
-      case "mentor": return MessageCircle;
-      default: return Zap;
+      case "course":
+      case "reading":
+        return BookOpen;
+      case "project":
+        return Target;
+      case "certification":
+        return Award;
+      case "networking":
+        return Users;
+      default:
+        return MessageCircle;
     }
   };
 
   return (
     <div className="space-y-6">
       {/* Page Header */}
-      <div>
-        <h1 className="text-2xl font-semibold text-foreground">
-          Welcome back, {currentProfile.name.split(" ")[0]}
+      <Reveal>
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+          Ciao, {profile.name.split(" ")[0]}
         </h1>
         <p className="mt-1 text-muted-foreground">
-          {"Here's"} your career progress at a glance
+          Ecco un riepilogo del tuo percorso di carriera
         </p>
-      </div>
+      </Reveal>
 
       {/* Top Row - Score + Radar Chart + Score Evolution */}
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Career Score Snapshot */}
-        <Card className="p-6">
-          <div className="mb-4 text-sm font-medium text-muted-foreground">Career Score</div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-5xl font-semibold text-foreground">{currentProfile.careerScore}</span>
-            <span className="text-2xl text-muted-foreground">/100</span>
-          </div>
-          {scoreChange !== 0 && (
-            <div className={`mt-2 flex items-center gap-1 text-sm ${scoreChange > 0 ? "text-success" : "text-destructive"}`}>
-              {scoreChange > 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
-              <span>{scoreChange > 0 ? "+" : ""}{scoreChange} points this month</span>
+        <Reveal className="h-full">
+        <Card className="relative h-full overflow-hidden border-primary/20 bg-gradient-to-br from-primary/[0.06] via-card to-card p-6">
+          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary to-success/70" />
+          <div className="text-sm font-medium text-muted-foreground">Punteggio Carriera</div>
+          <div className="mt-4 flex items-center gap-5">
+            <ScoreRing value={careerScore} size={112} />
+            <div className="min-w-0 flex-1">
+              {scoreChange !== 0 ? (
+                <div
+                  className={cn(
+                    "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium",
+                    scoreChange > 0
+                      ? "bg-success/10 text-success"
+                      : "bg-destructive/10 text-destructive",
+                  )}
+                >
+                  {scoreChange > 0 ? (
+                    <TrendingUp className="h-3.5 w-3.5" />
+                  ) : (
+                    <TrendingDown className="h-3.5 w-3.5" />
+                  )}
+                  <span>
+                    {scoreChange > 0 ? "+" : ""}
+                    {scoreChange} punti
+                  </span>
+                </div>
+              ) : (
+                <div className="text-xs text-muted-foreground">Andamento stabile</div>
+              )}
+              <div className="mt-3 flex items-center gap-2 text-sm">
+                <Target className="h-4 w-4 text-muted-foreground/70" />
+                <span className="font-medium text-foreground">
+                  {targetRoleLabel(profile.target_role)}
+                </span>
+              </div>
+              <div className="mt-2 flex items-start gap-2 text-sm">
+                <GraduationCap className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/70" />
+                <div className="min-w-0">
+                  <div className="font-medium text-foreground">{profile.year}</div>
+                  <div className="truncate text-xs text-muted-foreground">{profile.university}</div>
+                </div>
+              </div>
             </div>
-          )}
-          <div className="mt-4">
-            <div className="text-xs text-muted-foreground">Target Role</div>
-            <div className="mt-1 font-medium text-foreground">{currentProfile.targetRole}</div>
-          </div>
-          <div className="mt-4">
-            <div className="text-xs text-muted-foreground">Education</div>
-            <div className="mt-1 font-medium text-foreground">{currentProfile.year}</div>
-            <div className="text-sm text-muted-foreground">{currentProfile.university}</div>
           </div>
         </Card>
+        </Reveal>
 
         {/* Radar Chart - Score Breakdown */}
-        <Card className="p-6">
-          <div className="mb-2 text-sm font-medium text-muted-foreground">Score Breakdown</div>
+        <Reveal className="h-full" delay={70}>
+        <Card className="h-full p-6">
+          <div className="mb-2 text-sm font-medium text-muted-foreground">Dettaglio punteggio</div>
           <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <RadarChart cx="50%" cy="50%" outerRadius="70%" data={radarData}>
-                <PolarGrid stroke="var(--border)" />
-                <PolarAngleAxis 
-                  dataKey="dimension" 
-                  tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
-                />
-                <PolarRadiusAxis 
-                  angle={90} 
-                  domain={[0, 100]} 
-                  tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
-                />
-                <Radar
-                  name="Score"
-                  dataKey="value"
-                  stroke="var(--primary)"
-                  fill="var(--primary)"
-                  fillOpacity={0.2}
-                  strokeWidth={2}
-                />
-              </RadarChart>
-            </ResponsiveContainer>
+            {radarData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <RadarChart cx="50%" cy="50%" outerRadius="70%" data={radarData}>
+                  <PolarGrid stroke="var(--border)" />
+                  <PolarAngleAxis
+                    dataKey="dimension"
+                    tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
+                  />
+                  <PolarRadiusAxis
+                    angle={90}
+                    domain={[0, 100]}
+                    tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
+                  />
+                  <Radar
+                    name="Score"
+                    dataKey="value"
+                    stroke="var(--primary)"
+                    fill="var(--primary)"
+                    fillOpacity={0.2}
+                    strokeWidth={2}
+                  />
+                </RadarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex h-full items-center justify-center text-center text-sm text-muted-foreground">
+                Analisi non ancora disponibile.
+              </div>
+            )}
           </div>
         </Card>
+        </Reveal>
 
         {/* Score Evolution */}
-        <Card className="p-6">
-          <div className="mb-2 text-sm font-medium text-muted-foreground">Score Evolution</div>
-          {currentProfile.scoreHistory.length > 1 ? (
+        <Reveal className="h-full" delay={140}>
+        <Card className="h-full p-6">
+          <div className="mb-2 text-sm font-medium text-muted-foreground">Evoluzione del punteggio</div>
+          {scoreHistory.length > 1 ? (
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={currentProfile.scoreHistory}>
-                  <XAxis 
-                    dataKey="date" 
+                <LineChart data={scoreHistory}>
+                  <XAxis
+                    dataKey="date"
                     tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
                     axisLine={{ stroke: "var(--border)" }}
                     tickLine={false}
                   />
-                  <YAxis 
-                    domain={[0, 100]} 
+                  <YAxis
+                    domain={[0, 100]}
                     tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
                     axisLine={false}
                     tickLine={false}
                   />
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: "var(--card)", 
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "var(--card)",
                       border: "1px solid var(--border)",
                       borderRadius: "8px",
-                      fontSize: "12px"
+                      fontSize: "12px",
                     }}
                   />
-                  <Line 
-                    type="monotone" 
-                    dataKey="score" 
-                    stroke="var(--primary)" 
+                  <Line
+                    type="monotone"
+                    dataKey="score"
+                    stroke="var(--primary)"
                     strokeWidth={2}
                     dot={{ fill: "var(--primary)", strokeWidth: 0, r: 4 }}
                     activeDot={{ r: 6 }}
@@ -161,87 +261,158 @@ export function Dashboard() {
           ) : (
             <div className="flex h-64 flex-col items-center justify-center text-center">
               <div className="text-muted-foreground">
-                Upload more CV versions to see your score evolution over time.
+                Carica altre versioni del CV per vedere l&apos;evoluzione del punteggio nel tempo.
               </div>
               <Button asChild className="mt-4" variant="outline" size="sm">
-                <Link href="/cvs">Upload CV</Link>
+                <Link href="/cvs">Carica CV</Link>
               </Button>
             </div>
           )}
         </Card>
+        </Reveal>
       </div>
 
       {/* Second Row - Strengths + Gaps */}
       <div className="grid gap-6 md:grid-cols-2">
         {/* Strengths */}
-        <Card className="p-6">
-          <div className="mb-4 flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-success/10">
-              <TrendingUp className="h-4 w-4 text-success" />
+        <Reveal className="h-full">
+        <Card className="h-full p-6">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-success/10">
+              <BadgeCheck className="h-5 w-5 text-success" />
             </div>
-            <h2 className="font-semibold text-foreground">Top Strengths</h2>
+            <h2 className="font-semibold text-foreground">Punti di forza principali</h2>
           </div>
-          <ul className="space-y-3">
-            {currentProfile.strengths.map((strength, i) => (
+          <ul className="mt-5 space-y-4">
+            {strengths.slice(0, 3).map((strength, i) => (
               <li key={i} className="flex items-start gap-3">
-                <div className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-success" />
-                <span className="text-sm text-foreground">{strength}</span>
+                <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-success/10">
+                  <Check className="h-3.5 w-3.5 text-success" />
+                </div>
+                <div>
+                  <div className="text-sm font-medium text-foreground">{strength.title}</div>
+                  {strength.detail && strength.detail !== strength.title && (
+                    <p className="mt-0.5 text-sm leading-relaxed text-muted-foreground">
+                      {strength.detail}
+                    </p>
+                  )}
+                </div>
               </li>
             ))}
+            {strengths.length === 0 && (
+              <li className="text-sm text-muted-foreground">
+                Analizza un CV per scoprire i tuoi punti di forza.
+              </li>
+            )}
           </ul>
         </Card>
+        </Reveal>
 
         {/* Gaps */}
-        <Card className="p-6">
-          <div className="mb-4 flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-warning/10">
-              <Target className="h-4 w-4 text-warning" />
+        <Reveal className="h-full" delay={70}>
+        <Card className="h-full p-6">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-warning/15">
+              <Target className="h-5 w-5 text-warning-foreground" />
             </div>
-            <h2 className="font-semibold text-foreground">Areas to Improve</h2>
+            <h2 className="font-semibold text-foreground">Aree di miglioramento</h2>
           </div>
-          <ul className="space-y-3">
-            {currentProfile.gaps.map((gap, i) => (
-              <li key={i} className="flex items-start gap-3">
-                <div className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-warning" />
-                <span className="text-sm text-foreground">{gap}</span>
+          <ul className="mt-5 space-y-3">
+            {gaps.slice(0, 3).map((gap, i) => (
+              <li
+                key={i}
+                className="flex items-start justify-between gap-3 rounded-lg border border-border/70 bg-muted/20 p-3"
+              >
+                <div className="min-w-0">
+                  <div className="text-sm font-medium text-foreground">{gap.title}</div>
+                  {gap.detail && (
+                    <p className="mt-0.5 text-sm leading-relaxed text-muted-foreground">
+                      {gap.detail}
+                    </p>
+                  )}
+                </div>
+                <PriorityPill priority={gap.priority} />
               </li>
             ))}
+            {gaps.length === 0 && (
+              <li className="text-sm text-muted-foreground">
+                Nessuna area di miglioramento individuata.
+              </li>
+            )}
           </ul>
         </Card>
+        </Reveal>
       </div>
 
       {/* Third Row - Next Actions + Recent Activity */}
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Next Actions */}
-        <div className="lg:col-span-2 space-y-4">
-          <h2 className="font-semibold text-foreground">What to Do Next</h2>
+        <Reveal className="lg:col-span-2">
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold text-foreground">Cosa fare ora</h2>
+            <Button asChild variant="ghost" size="sm" className="text-primary hover:text-primary">
+              <Link href="/cvs">
+                Vedi il percorso
+                <ArrowRight className="ml-1 h-4 w-4" />
+              </Link>
+            </Button>
+          </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {currentProfile.nextActions.map((action) => {
+            {nextActions.map((action) => {
               const Icon = getActionIcon(action.type);
+              const link =
+                action.resources.find((r) => r.url?.startsWith("/"))?.url ?? "/mentor";
               return (
-                <Card key={action.id} className="flex flex-col p-4">
-                  <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                    <Icon className="h-5 w-5 text-primary" />
+                <Card
+                  key={action.id}
+                  className="group flex flex-col gap-0 p-5 transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                      <Icon className="h-5 w-5 text-primary" />
+                    </div>
+                    <PriorityPill priority={action.priority} />
                   </div>
-                  <h3 className="font-medium text-foreground">{action.title}</h3>
-                  <p className="mt-1 flex-1 text-sm text-muted-foreground">{action.description}</p>
-                  <Button asChild variant="ghost" size="sm" className="mt-3 w-fit -ml-2 text-primary hover:text-primary">
-                    <Link href={action.link}>
-                      {action.cta}
-                      <ArrowRight className="ml-1 h-4 w-4" />
+                  <h3 className="mt-3 font-medium text-foreground">{action.title}</h3>
+                  <p className="mt-1 flex-1 text-sm leading-relaxed text-muted-foreground">
+                    {action.description}
+                  </p>
+                  {action.estimated_effort && (
+                    <div className="mt-3 inline-flex items-center gap-1 text-xs text-muted-foreground">
+                      <Clock className="h-3.5 w-3.5" />
+                      {action.estimated_effort}
+                    </div>
+                  )}
+                  <Button
+                    asChild
+                    variant="ghost"
+                    size="sm"
+                    className="mt-3 -ml-2 w-fit text-primary hover:text-primary"
+                  >
+                    <Link href={link}>
+                      Scopri di più
+                      <ArrowRight className="ml-1 h-4 w-4 transition-transform group-hover:translate-x-0.5" />
                     </Link>
                   </Button>
                 </Card>
               );
             })}
+            {nextActions.length === 0 && (
+              <Card className="p-5 text-sm text-muted-foreground sm:col-span-2 lg:col-span-3">
+                Esegui l&apos;analisi di un CV per ricevere i prossimi passi consigliati.
+              </Card>
+            )}
           </div>
         </div>
+        </Reveal>
 
         {/* Recent Activity */}
-        <Card className="p-6">
-          <h2 className="mb-4 font-semibold text-foreground">Recent Activity</h2>
+        <Reveal className="h-full" delay={70}>
+        <Card className="h-full p-6">
+          <h2 className="mb-4 font-semibold text-foreground">Attività recente</h2>
           <div className="space-y-4">
-            {currentProfile.recentActivity.slice(0, 4).map((activity) => {
+            {recentActivity.slice(0, 4).map((activity) => {
               const Icon = getActivityIcon(activity.type);
               return (
                 <div key={activity.id} className="flex items-start gap-3">
@@ -255,9 +426,21 @@ export function Dashboard() {
                 </div>
               );
             })}
+            {recentActivity.length === 0 && (
+              <p className="text-sm text-muted-foreground">Nessuna attività recente.</p>
+            )}
           </div>
         </Card>
+        </Reveal>
       </div>
     </div>
   );
+}
+
+// High-priority actions first, capped at 3, for the dashboard's "What to Do Next".
+function topActions(learningPath: LearningPath | null) {
+  if (!learningPath) return [];
+  return [...learningPath.actions]
+    .sort((a, b) => PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority])
+    .slice(0, 3);
 }
