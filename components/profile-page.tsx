@@ -112,7 +112,7 @@ function RemovableChip({
           type="button"
           onClick={onRemove}
           aria-label={removeLabel}
-          className="ml-1.5 -mr-1 inline-flex items-center rounded-full opacity-70 transition-opacity hover:text-destructive hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="-mr-1 ml-1 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full opacity-70 transition-opacity hover:text-destructive hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <X className="h-3 w-3" />
         </button>
@@ -327,9 +327,9 @@ export function ProfilePage() {
 
       {/* Regenerate Banner */}
       {showRegenerateBanner && (
-        <Card className="flex items-center justify-between border-primary/30 bg-primary/5 p-4">
-          <div className="flex items-center gap-3">
-            <RefreshCw className="h-5 w-5 text-primary" />
+        <Card className="flex flex-col gap-3 border-primary/30 bg-primary/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3 sm:items-center">
+            <RefreshCw className="mt-0.5 h-5 w-5 shrink-0 text-primary sm:mt-0" />
             <div>
               <div className="font-medium text-foreground">Profilo aggiornato</div>
               <div className="text-sm text-muted-foreground">
@@ -337,7 +337,7 @@ export function ProfilePage() {
               </div>
             </div>
           </div>
-          <Button onClick={() => setShowRegenerateBanner(false)}>
+          <Button className="w-full shrink-0 sm:w-auto" onClick={() => setShowRegenerateBanner(false)}>
             Rigenera analisi
           </Button>
         </Card>
@@ -349,8 +349,8 @@ export function ProfilePage() {
         <AccordionItem value="education" className="rounded-lg border bg-card px-6">
           <AccordionTrigger className="py-4 hover:no-underline">
             <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
-                <GraduationCap className="h-5 w-5 text-primary" />
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-cat-1/10">
+                <GraduationCap className="h-5 w-5 text-cat-1" />
               </div>
               <span className="font-semibold">Formazione</span>
             </div>
@@ -425,8 +425,8 @@ export function ProfilePage() {
         <AccordionItem value="industry" className="rounded-lg border bg-card px-6">
           <AccordionTrigger className="py-4 hover:no-underline">
             <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
-                <Briefcase className="h-5 w-5 text-primary" />
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-cat-2/10">
+                <Briefcase className="h-5 w-5 text-cat-2" />
               </div>
               <span className="font-semibold">Settori di interesse</span>
             </div>
@@ -475,8 +475,8 @@ export function ProfilePage() {
         <AccordionItem value="goals" className="rounded-lg border bg-card px-6">
           <AccordionTrigger className="py-4 hover:no-underline">
             <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
-                <Target className="h-5 w-5 text-primary" />
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-cat-3/10">
+                <Target className="h-5 w-5 text-cat-3" />
               </div>
               <span className="font-semibold">Obiettivi di carriera</span>
             </div>
@@ -548,8 +548,8 @@ export function ProfilePage() {
         <AccordionItem value="constraints" className="rounded-lg border bg-card px-6">
           <AccordionTrigger className="py-4 hover:no-underline">
             <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
-                <MapPin className="h-5 w-5 text-primary" />
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-cat-4/10">
+                <MapPin className="h-5 w-5 text-cat-4" />
               </div>
               <span className="font-semibold">Vincoli</span>
             </div>
@@ -632,8 +632,8 @@ export function ProfilePage() {
         <AccordionItem value="preferences" className="rounded-lg border bg-card px-6">
           <AccordionTrigger className="py-4 hover:no-underline">
             <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
-                <Settings className="h-5 w-5 text-primary" />
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-cat-5/10">
+                <Settings className="h-5 w-5 text-cat-5" />
               </div>
               <span className="font-semibold">Preferenze di lavoro</span>
             </div>
