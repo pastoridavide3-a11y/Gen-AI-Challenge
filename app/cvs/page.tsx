@@ -1,5 +1,10 @@
+import { Suspense } from "react";
 import { CVsPage } from "@/components/cvs-page";
 
 export default function CVsRoute() {
-  return <CVsPage />;
+  return (
+    <Suspense>
+      <CVsPage />
+    </Suspense>
+  );
 }

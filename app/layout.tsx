@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Career AI Companion',
+  title: 'Navis',
   description: 'Coaching di carriera basato su AI per studenti universitari',
 }
 

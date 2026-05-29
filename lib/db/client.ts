@@ -1,8 +1,9 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 
-// App Router server client. No auth in this app, so the cookie handlers exist
-// only to satisfy the @supabase/ssr contract; nothing reads or writes a session.
+// App Router server client. The cookie handlers carry the Supabase auth session
+// (set by the login form / refreshed in middleware) so server components and API
+// routes see the authenticated user. Data reads still run under the anon key.
 export async function createClient() {
   const cookieStore = await cookies()
 

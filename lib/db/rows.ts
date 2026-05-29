@@ -89,7 +89,11 @@ export type CvBundle = {
   analysis: AnalysisRow | null
   score: number | null
   scoreBreakdown: ScoreBreakdown | null
+  // "Caricato il DD mese YYYY · HH:mm" — shown as metadata below the version label.
   uploadedLabel: string
+  // Version label computed from sorted position among all profile CVs, e.g.
+  // "Versione 1". Never read from the DB `version` column. See lib/cv-label.ts.
+  title: string
 }
 
 export type ConversationBundle = {

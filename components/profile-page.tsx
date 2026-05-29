@@ -68,19 +68,19 @@ function SectionEditBar({
   editing: boolean;
   onEdit: () => void;
   onCancel: () => void;
-  onSave: () => void;
+  onSave: () => void | Promise<void>;
 }) {
   return (
-    <div className="mb-4 flex justify-end">
+    <div className="flex shrink-0 items-center gap-2">
       {editing ? (
-        <div className="flex gap-2">
+        <>
           <Button size="sm" variant="ghost" onClick={onCancel}>
             <X className="mr-1 h-4 w-4" /> Annulla
           </Button>
           <Button size="sm" onClick={onSave}>
             <Check className="mr-1 h-4 w-4" /> Salva
           </Button>
-        </div>
+        </>
       ) : (
         <Button size="sm" variant="outline" onClick={onEdit}>
           <Pencil className="mr-1 h-4 w-4" /> Modifica
@@ -206,7 +206,7 @@ function TextChipAdder({
 }
 
 export function ProfilePage() {
-  const { current } = useProfile();
+  const { current, applySurvey, applyProfile } = useProfile();
   const profile = current.profile;
   const survey = current.survey;
   // Education is anagrafica: it lives on the profile, while GPA is read off the
@@ -220,20 +220,61 @@ export function ProfilePage() {
 
   const [editingSection, setEditingSection] = useState<EditingSection>(null);
   const [showRegenerateBanner, setShowRegenerateBanner] = useState(false);
+  // The accordion is controlled so that hitting "Modifica" on a collapsed
+  // section also expands it — otherwise you'd enter edit mode with the fields
+  // still hidden. Every section starts open.
+  const [openSections, setOpenSections] = useState<string[]>([
+    "education",
+    "industry",
+    "goals",
+    "constraints",
+    "preferences",
+  ]);
 
   // Local state for form editing (mock - doesn't actually persist)
   const [formData, setFormData] = useState<SurveyData | null>(survey);
   const [eduForm, setEduForm] = useState<EducationForm>(initialEducation);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setEditingSection(null);
-    setShowRegenerateBanner(true);
+    try {
+      if (editingSection === 'education') {
+        const fields = {
+          university: eduForm.university || null,
+          course: eduForm.course || null,
+          year: eduForm.year || null,
+        };
+        const res = await fetch(`/api/profiles/${current.profile.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(fields),
+        });
+        if (!res.ok) throw new Error(await res.text());
+        applyProfile(current.profile.id, fields);
+      } else if (formData) {
+        const res = await fetch(`/api/surveys/${current.profile.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formData),
+        });
+        if (!res.ok) throw new Error(await res.text());
+        applySurvey(current.profile.id, formData);
+      }
+      setShowRegenerateBanner(true);
+    } catch (err) {
+      console.error('Profile save failed:', err);
+    }
   };
 
   const handleCancel = () => {
     setFormData(survey);
     setEduForm(initialEducation);
     setEditingSection(null);
+  };
+
+  const startEditing = (section: Exclude<EditingSection, null>) => {
+    setEditingSection(section);
+    setOpenSections((prev) => (prev.includes(section) ? prev : [...prev, section]));
   };
 
   if (!formData) {
@@ -344,24 +385,28 @@ export function ProfilePage() {
       )}
 
       {/* Profile Sections */}
-      <Accordion type="multiple" defaultValue={["education", "industry", "goals", "constraints", "preferences"]} className="space-y-4">
+      <Accordion type="multiple" value={openSections} onValueChange={setOpenSections} className="space-y-4">
         {/* Education */}
         <AccordionItem value="education" className="rounded-lg border bg-card px-6">
-          <AccordionTrigger className="py-4 hover:no-underline">
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-cat-1/10">
-                <GraduationCap className="h-5 w-5 text-cat-1" />
-              </div>
-              <span className="font-semibold">Formazione</span>
+          <div className="flex items-center gap-2">
+            <div className="flex-1">
+              <AccordionTrigger className="py-3 hover:no-underline">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-cat-1/10">
+                    <GraduationCap className="h-5 w-5 text-cat-1" />
+                  </div>
+                  <span className="font-semibold">Formazione</span>
+                </div>
+              </AccordionTrigger>
             </div>
-          </AccordionTrigger>
-          <AccordionContent className="pb-4">
             <SectionEditBar
               editing={editingSection === "education"}
-              onEdit={() => setEditingSection("education")}
+              onEdit={() => startEditing("education")}
               onCancel={handleCancel}
               onSave={handleSave}
             />
+          </div>
+          <AccordionContent className="pb-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <Label htmlFor="edu-university" className={FIELD_LABEL}>Università</Label>
@@ -423,21 +468,25 @@ export function ProfilePage() {
 
         {/* Industry Interests */}
         <AccordionItem value="industry" className="rounded-lg border bg-card px-6">
-          <AccordionTrigger className="py-4 hover:no-underline">
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-cat-2/10">
-                <Briefcase className="h-5 w-5 text-cat-2" />
-              </div>
-              <span className="font-semibold">Settori di interesse</span>
+          <div className="flex items-center gap-2">
+            <div className="flex-1">
+              <AccordionTrigger className="py-3 hover:no-underline">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-cat-2/10">
+                    <Briefcase className="h-5 w-5 text-cat-2" />
+                  </div>
+                  <span className="font-semibold">Settori di interesse</span>
+                </div>
+              </AccordionTrigger>
             </div>
-          </AccordionTrigger>
-          <AccordionContent className="pb-4">
             <SectionEditBar
               editing={editingIndustry}
-              onEdit={() => setEditingSection("industry")}
+              onEdit={() => startEditing("industry")}
               onCancel={handleCancel}
               onSave={handleSave}
             />
+          </div>
+          <AccordionContent className="pb-4">
             <div role="group" aria-label="Settori di interesse" className="flex flex-wrap gap-2">
               {formData.industry_interests.length === 0 && !editingIndustry && (
                 <span className="text-sm text-muted-foreground">Nessun settore selezionato.</span>
@@ -473,21 +522,25 @@ export function ProfilePage() {
 
         {/* Career Goals */}
         <AccordionItem value="goals" className="rounded-lg border bg-card px-6">
-          <AccordionTrigger className="py-4 hover:no-underline">
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-cat-3/10">
-                <Target className="h-5 w-5 text-cat-3" />
-              </div>
-              <span className="font-semibold">Obiettivi di carriera</span>
+          <div className="flex items-center gap-2">
+            <div className="flex-1">
+              <AccordionTrigger className="py-3 hover:no-underline">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-cat-3/10">
+                    <Target className="h-5 w-5 text-cat-3" />
+                  </div>
+                  <span className="font-semibold">Obiettivi di carriera</span>
+                </div>
+              </AccordionTrigger>
             </div>
-          </AccordionTrigger>
-          <AccordionContent className="pb-4">
             <SectionEditBar
               editing={editingSection === "goals"}
-              onEdit={() => setEditingSection("goals")}
+              onEdit={() => startEditing("goals")}
               onCancel={handleCancel}
               onSave={handleSave}
             />
+          </div>
+          <AccordionContent className="pb-4">
             <div className="space-y-4">
               <div>
                 <Label htmlFor="goal-one-year" className={FIELD_LABEL}>Obiettivo a 1 anno</Label>
@@ -546,21 +599,25 @@ export function ProfilePage() {
 
         {/* Constraints */}
         <AccordionItem value="constraints" className="rounded-lg border bg-card px-6">
-          <AccordionTrigger className="py-4 hover:no-underline">
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-cat-4/10">
-                <MapPin className="h-5 w-5 text-cat-4" />
-              </div>
-              <span className="font-semibold">Vincoli</span>
+          <div className="flex items-center gap-2">
+            <div className="flex-1">
+              <AccordionTrigger className="py-3 hover:no-underline">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-cat-4/10">
+                    <MapPin className="h-5 w-5 text-cat-4" />
+                  </div>
+                  <span className="font-semibold">Vincoli</span>
+                </div>
+              </AccordionTrigger>
             </div>
-          </AccordionTrigger>
-          <AccordionContent className="pb-4">
             <SectionEditBar
               editing={editingConstraints}
-              onEdit={() => setEditingSection("constraints")}
+              onEdit={() => startEditing("constraints")}
               onCancel={handleCancel}
               onSave={handleSave}
             />
+          </div>
+          <AccordionContent className="pb-4">
             <div className="grid gap-4 sm:grid-cols-3">
               <div>
                 <Label id="constraints-geo-label" className={FIELD_LABEL}>Disponibilità geografica</Label>
@@ -630,21 +687,25 @@ export function ProfilePage() {
 
         {/* Preferences */}
         <AccordionItem value="preferences" className="rounded-lg border bg-card px-6">
-          <AccordionTrigger className="py-4 hover:no-underline">
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-cat-5/10">
-                <Settings className="h-5 w-5 text-cat-5" />
-              </div>
-              <span className="font-semibold">Preferenze di lavoro</span>
+          <div className="flex items-center gap-2">
+            <div className="flex-1">
+              <AccordionTrigger className="py-3 hover:no-underline">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-cat-5/10">
+                    <Settings className="h-5 w-5 text-cat-5" />
+                  </div>
+                  <span className="font-semibold">Preferenze di lavoro</span>
+                </div>
+              </AccordionTrigger>
             </div>
-          </AccordionTrigger>
-          <AccordionContent className="pb-4">
             <SectionEditBar
               editing={editingPreferences}
-              onEdit={() => setEditingSection("preferences")}
+              onEdit={() => startEditing("preferences")}
               onCancel={handleCancel}
               onSave={handleSave}
             />
+          </div>
+          <AccordionContent className="pb-4">
             <div className="grid gap-4 sm:grid-cols-3">
               <div>
                 <Label id="prefs-size-label" className={FIELD_LABEL}>Dimensione azienda</Label>

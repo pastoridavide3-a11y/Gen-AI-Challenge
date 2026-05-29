@@ -7,7 +7,7 @@ import {
   type MouseEvent,
   type ReactNode,
 } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { format } from "date-fns";
 import { it } from "date-fns/locale";
@@ -75,7 +75,6 @@ import {
   ArrowLeft,
   ArrowRight,
   GitCompare,
-  Calendar,
   Target,
   Archive,
   Sparkles,
@@ -418,7 +417,7 @@ function DeleteCvButton({
       const res = await fetch(`/api/cvs/${cv.cv.id}`, { method: "DELETE" });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? "Eliminazione non riuscita.");
-      toast.success(`CV v${cv.cv.version} eliminato.`);
+      toast.success(`${cv.title} eliminato.`);
       setOpen(false);
       onDeleted?.();
       router.refresh();
@@ -458,7 +457,7 @@ function DeleteCvButton({
       </AlertDialogTrigger>
       <AlertDialogContent onClick={(e) => e.stopPropagation()}>
         <AlertDialogHeader>
-          <AlertDialogTitle>Eliminare il CV v{cv.cv.version}?</AlertDialogTitle>
+          <AlertDialogTitle>Eliminare {cv.title}?</AlertDialogTitle>
           <AlertDialogDescription>
             {isActive
               ? "È il tuo CV attivo. La versione precedente più recente, se esiste, diventerà quella attiva. "
@@ -487,45 +486,105 @@ function DeleteCvButton({
   );
 }
 
+// Promotes an archived CV to active. PATCHes the row, then updates client state
+// via setActiveCv so the list hero, dashboard and sidebar score reflect the new
+// active CV immediately — the same no-refresh pattern AnalyzeCvButton uses.
+function SetActiveCvButton({
+  cv,
+  variant = "outline",
+  size = "default",
+}: {
+  cv: CvBundle;
+  variant?: ComponentProps<typeof Button>["variant"];
+  size?: ComponentProps<typeof Button>["size"];
+}) {
+  const { current, setActiveCv } = useProfile();
+  const [loading, setLoading] = useState(false);
+
+  const handleClick = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/cvs/${cv.cv.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "active" }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "Impossibile impostare il CV come attivo.");
+      setActiveCv(current.profile.id, cv.cv.id);
+      toast.success(`${cv.title} impostato come attivo.`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Operazione non riuscita.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Button variant={variant} size={size} onClick={handleClick} disabled={loading}>
+      {loading ? (
+        <>
+          <Spinner className="mr-2 h-4 w-4" />
+          Impostazione…
+        </>
+      ) : (
+        <>
+          <BadgeCheck className="mr-2 h-4 w-4" />
+          Imposta come CV attivo
+        </>
+      )}
+    </Button>
+  );
+}
+
 // ---- CV list (history / version manager) ----
 
 export function CVsPage() {
   const { current } = useProfile();
-  const [viewMode, setViewMode] = useState<ViewMode>("list");
-  const [selectedCv, setSelectedCv] = useState<CvBundle | null>(null);
-  const [compareCv, setCompareCv] = useState<CvBundle | null>(null);
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
 
   const activeCv = current.activeCv;
   const archivedCvs = current.cvs.filter((c) => c.cv.status === "archived");
 
+  // View state lives in the URL so that the sidebar "I miei CV" link (which
+  // always points to /cvs with no params) naturally resets to the list view,
+  // and the browser back button works for free.
+  const cvParam = searchParams.get("cv");
+  const compareParam = searchParams.get("compare");
+
+  let viewMode: ViewMode = "list";
+  let selectedCv: CvBundle | null = null;
+  let compareCv: CvBundle | null = null;
+
+  if (compareParam) {
+    compareCv = current.cvs.find((c) => c.cv.id === compareParam) ?? null;
+    if (compareCv && activeCv) {
+      selectedCv = activeCv;
+      viewMode = "compare";
+    }
+  } else if (cvParam) {
+    selectedCv = current.cvs.find((c) => c.cv.id === cvParam) ?? null;
+    if (selectedCv) viewMode = "detail";
+  }
+
   const handleViewDetail = (cv: CvBundle) => {
-    setSelectedCv(cv);
-    setViewMode("detail");
+    router.push(`/cvs?cv=${cv.cv.id}`);
   };
 
   const handleCompare = (cv: CvBundle) => {
     if (activeCv && cv.cv.id !== activeCv.cv.id) {
-      setSelectedCv(activeCv);
-      setCompareCv(cv);
-      setViewMode("compare");
+      router.push(`/cvs?compare=${cv.cv.id}`);
     }
   };
 
   const handleBackToList = () => {
-    setViewMode("list");
-    setSelectedCv(null);
-    setCompareCv(null);
+    router.push("/cvs");
   };
 
   if (viewMode === "detail" && selectedCv) {
-    return (
-      <CVDetailView
-        cv={selectedCv}
-        onBack={handleBackToList}
-        isActive={selectedCv.cv.status === "active"}
-      />
-    );
+    return <CVDetailView cv={selectedCv} onBack={handleBackToList} />;
   }
 
   if (viewMode === "compare" && selectedCv && compareCv) {
@@ -633,18 +692,15 @@ function ActiveCvCard({ cv, onOpen }: { cv: CvBundle; onOpen: () => void }) {
           </div>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-xl font-semibold text-foreground">Versione {cv.cv.version}</h3>
+              <h3 className="text-xl font-semibold text-foreground">{cv.title}</h3>
               <span className="inline-flex items-center gap-1.5 rounded-full bg-success/10 px-2.5 py-0.5 text-xs font-medium text-success">
                 <span className="h-1.5 w-1.5 rounded-full bg-success" />
                 CV attivo
               </span>
             </div>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Il CV usato per la tua analisi e il punteggio di carriera.
-            </p>
+            <p className="mt-1 text-sm text-muted-foreground">{cv.uploadedLabel}</p>
             <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
               <MetaItem icon={Target} label="Ruolo" value={role} />
-              <MetaItem icon={Calendar} label="Caricato" value={cv.uploadedLabel} />
               {analysed && <MetaItem icon={Sparkles} label="Analisi" value={analysed} />}
             </div>
           </div>
@@ -709,16 +765,13 @@ function ArchivedCvCard({
             <Archive className="h-5 w-5" />
           </div>
           <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="font-semibold text-foreground">Versione {cv.cv.version}</span>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-semibold text-foreground">{cv.title}</span>
               <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
                 Archiviato
               </span>
             </div>
-            <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Calendar className="h-3.5 w-3.5" />
-              {cv.uploadedLabel}
-            </div>
+            <p className="mt-0.5 text-xs text-muted-foreground">{cv.uploadedLabel}</p>
           </div>
         </div>
         <div className="flex flex-col items-end">
@@ -1049,11 +1102,15 @@ function AnalysisProgressDialog({
 
 // ---- CV analysis detail ----
 
-function CVDetailView({ cv: cvProp, onBack, isActive }: { cv: CvBundle; onBack: () => void; isActive: boolean }) {
+function CVDetailView({ cv: cvProp, onBack }: { cv: CvBundle; onBack: () => void }) {
   const { current } = useProfile();
   // Resolve the live bundle from context by id, so a just-run analysis (merged in
-  // via applyAnalysis) shows here even though the parent passed a snapshot.
+  // via applyAnalysis) or a freshly promoted active status (via setActiveCv) shows
+  // here even though the parent passed a snapshot. Derive isActive from the live
+  // row too, so the "Attivo" badge and "Imposta come CV attivo" button stay in
+  // sync after promotion without the parent re-passing a prop.
   const cv = current.cvs.find((c) => c.cv.id === cvProp.cv.id) ?? cvProp;
+  const isActive = cv.cv.status === "active";
   const breakdown = cv.scoreBreakdown;
   const formal = cv.analysis?.formal_evaluation ?? null;
   const gap = cv.analysis?.gap_analysis ?? null;
@@ -1083,7 +1140,7 @@ function CVDetailView({ cv: cvProp, onBack, isActive }: { cv: CvBundle; onBack: 
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-                CV · Versione {cv.cv.version}
+                {cv.title}
               </h1>
               {isActive && (
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-success/10 px-2.5 py-0.5 text-xs font-medium text-success">
@@ -1093,14 +1150,15 @@ function CVDetailView({ cv: cvProp, onBack, isActive }: { cv: CvBundle; onBack: 
               )}
             </div>
             <p className="mt-1 text-sm text-muted-foreground">
-              Caricato il {cv.uploadedLabel} · Ruolo target {roleLabel}
+              Ruolo target {roleLabel}
               {analysed ? ` · Analisi del ${analysed}` : ""}
             </p>
+            <p className="mt-0.5 text-xs text-muted-foreground">{cv.uploadedLabel}</p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <ViewPdfButton filePath={cv.cv.file_path} size="default" />
-          {!isActive && <Button variant="outline">Imposta come CV attivo</Button>}
+          {!isActive && <SetActiveCvButton cv={cv} />}
           <DeleteCvButton cv={cv} isActive={isActive} size="default" onDeleted={onBack} />
           <AnalyzeCvButton cv={cv} />
         </div>
@@ -1914,7 +1972,7 @@ function CVCompareView({
             Confronta versioni
           </h1>
           <p className="mt-0.5 text-muted-foreground">
-            Versione {activeCv.cv.version} (attiva) vs Versione {compareCv.cv.version}
+            {activeCv.title} (attivo) vs {compareCv.title}
           </p>
         </div>
       </div>
@@ -1923,7 +1981,7 @@ function CVCompareView({
       <div className="grid gap-6 md:grid-cols-3">
         <Card className="flex flex-col items-center p-6 text-center">
           <div className="text-sm font-medium text-muted-foreground">
-            Versione {activeCv.cv.version} (attiva)
+            {activeCv.title} (attivo)
           </div>
           <ScoreRing value={activeCv.score} size={104} className="mt-3" />
         </Card>
@@ -1953,7 +2011,7 @@ function CVCompareView({
         </Card>
         <Card className="flex flex-col items-center p-6 text-center">
           <div className="text-sm font-medium text-muted-foreground">
-            Versione {compareCv.cv.version}
+            {compareCv.title}
           </div>
           <ScoreRing value={compareCv.score} size={104} className="mt-3" />
         </Card>
@@ -1968,19 +2026,19 @@ function CVCompareView({
               <BarChart data={compareData} layout="vertical">
                 <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
                 <YAxis dataKey="name" type="category" width={100} tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
-                <Bar dataKey="active" fill="var(--primary)" radius={[0, 4, 4, 0]} barSize={12} name={`v${activeCv.cv.version}`} />
-                <Bar dataKey="compare" fill="var(--muted-foreground)" radius={[0, 4, 4, 0]} barSize={12} name={`v${compareCv.cv.version}`} />
+                <Bar dataKey="active" fill="var(--primary)" radius={[0, 4, 4, 0]} barSize={12} name={activeCv.title} />
+                <Bar dataKey="compare" fill="var(--muted-foreground)" radius={[0, 4, 4, 0]} barSize={12} name={compareCv.title} />
               </BarChart>
             </ResponsiveContainer>
           </div>
           <div className="mt-4 flex items-center justify-center gap-6 text-sm">
             <div className="flex items-center gap-2">
               <div className="h-3 w-3 rounded bg-primary" />
-              <span className="text-muted-foreground">Versione {activeCv.cv.version} (attiva)</span>
+              <span className="text-muted-foreground">{activeCv.title} (attivo)</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="h-3 w-3 rounded bg-muted-foreground" />
-              <span className="text-muted-foreground">Versione {compareCv.cv.version}</span>
+              <span className="text-muted-foreground">{compareCv.title}</span>
             </div>
           </div>
         </Card>
@@ -1991,7 +2049,7 @@ function CVCompareView({
         {/* New skills */}
         <Card className="p-6">
           <h2 className="font-semibold text-foreground">
-            Competenze aggiunte nella v{activeCv.cv.version}
+            Competenze aggiunte nel CV attivo
           </h2>
           <div className="mt-4 flex flex-wrap gap-2">
             {newSkills.map((skill, i) => (

@@ -1,4 +1,4 @@
-// Mock data for Career AI Companion prototype
+// Mock data for Navis prototype
 
 export type Profile = {
   id: string;

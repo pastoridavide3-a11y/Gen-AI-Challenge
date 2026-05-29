@@ -6,6 +6,7 @@ import { getSurveyForProfile } from './surveys'
 import { getLatestAnalysisForCv } from './analyses'
 import { getConversationsForProfile, getMessagesForConversation } from './mentor'
 import { computeOverallScore, buildScoreBreakdown } from '@/lib/scoring'
+import { cvVersionLabel, cvUploadedLabel } from '@/lib/cv-label'
 import type {
   ProfileRow,
   ProfileBundle,
@@ -35,7 +36,7 @@ function buildRecentActivity(
       item: {
         id: `cv-${c.cv.id}`,
         type: 'cv_upload',
-        description: `CV v${c.cv.version} caricato`,
+        description: 'Nuovo CV caricato',
         date: format(new Date(c.cv.uploaded_at), 'd MMM yyyy', { locale: it }),
       },
     })
@@ -66,6 +67,14 @@ async function buildBundle(profile: ProfileRow): Promise<ProfileBundle> {
     getConversationsForProfile(profile.id),
   ])
 
+  // Assign version numbers by sorting CVs oldest-first. "Versione 1" is always
+  // the earliest upload, "Versione N" the most recent, regardless of gaps
+  // left by deletions. The DB `version` column is intentionally ignored here.
+  const sortedAscending = [...cvRows].sort(
+    (a, b) => new Date(a.uploaded_at).getTime() - new Date(b.uploaded_at).getTime(),
+  )
+  const versionNumber = new Map(sortedAscending.map((cv, i) => [cv.id, i + 1]))
+
   const cvs: CvBundle[] = await Promise.all(
     cvRows.map(async (cv) => {
       const analysis = await getLatestAnalysisForCv(cv.id)
@@ -76,7 +85,8 @@ async function buildBundle(profile: ProfileRow): Promise<ProfileBundle> {
         analysis,
         score: computeOverallScore(formal, gap),
         scoreBreakdown: buildScoreBreakdown(formal, gap),
-        uploadedLabel: format(new Date(cv.uploaded_at), 'd MMM yyyy', { locale: it }),
+        uploadedLabel: cvUploadedLabel(cv.uploaded_at),
+        title: cvVersionLabel(versionNumber.get(cv.id) ?? 0),
       }
     }),
   )

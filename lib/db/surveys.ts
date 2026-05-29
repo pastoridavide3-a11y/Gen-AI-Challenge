@@ -12,3 +12,13 @@ export async function getSurveyForProfile(profileId: string): Promise<SurveyData
   if (error) throw new Error(`getSurveyForProfile(${profileId}): ${error.message}`)
   return (data?.data as SurveyData | undefined) ?? null
 }
+
+export async function updateSurvey(profileId: string, surveyData: SurveyData): Promise<void> {
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('surveys')
+    .update({ data: surveyData })
+    .eq('profile_id', profileId)
+
+  if (error) throw new Error(`updateSurvey(${profileId}): ${error.message}`)
+}

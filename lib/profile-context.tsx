@@ -47,6 +47,15 @@ type ProfileContextType = {
   // Removes a deleted conversation from client state so the sidebar updates
   // instantly, without a server round-trip.
   removeConversation: (profileId: string, conversationId: string) => void;
+  // Promotes a CV to active in client state — flips the statuses and recomputes
+  // the active-CV-derived fields (career score, breakdown, latest analysis) so
+  // the CV list, dashboard and sidebar update instantly, mirroring the server.
+  setActiveCv: (profileId: string, cvId: string) => void;
+  // Merges a saved survey into client state so the profile page reflects the
+  // persisted data without a server round-trip.
+  applySurvey: (profileId: string, survey: import('@/lib/types').SurveyData) => void;
+  // Merges saved profile education fields into client state.
+  applyProfile: (profileId: string, fields: Partial<import('@/lib/db/rows').ProfileRow>) => void;
 };
 
 const ProfileContext = createContext<ProfileContextType | undefined>(undefined);
@@ -209,6 +218,62 @@ export function ProfileProvider({
     [],
   );
 
+  const applySurvey = useCallback(
+    (profileId: string, survey: import('@/lib/types').SurveyData) => {
+      setBundles((prev) =>
+        prev.map((bundle) =>
+          bundle.profile.id !== profileId ? bundle : { ...bundle, survey },
+        ),
+      );
+    },
+    [],
+  );
+
+  const applyProfile = useCallback(
+    (profileId: string, fields: Partial<import('@/lib/db/rows').ProfileRow>) => {
+      setBundles((prev) =>
+        prev.map((bundle) =>
+          bundle.profile.id !== profileId
+            ? bundle
+            : { ...bundle, profile: { ...bundle.profile, ...fields } },
+        ),
+      );
+    },
+    [],
+  );
+
+  // Flips the active CV within a profile: the chosen CV becomes active, every
+  // other is archived (one-active-per-profile, matching setActiveCv on the
+  // server). Per-CV score/breakdown are already on each bundle, so we only pick
+  // the new active CV's values for the profile-level fields. scoreHistory is
+  // independent of which CV is active, so it's left untouched.
+  const setActiveCv = useCallback((profileId: string, cvId: string) => {
+    setBundles((prev) =>
+      prev.map((bundle) => {
+        if (bundle.profile.id !== profileId) return bundle;
+
+        const cvs: CvBundle[] = bundle.cvs.map((cb) => ({
+          ...cb,
+          cv: {
+            ...cb.cv,
+            status: cb.cv.id === cvId ? "active" : "archived",
+          },
+        }));
+
+        const activeCv = cvs.find((c) => c.cv.status === "active") ?? cvs[0] ?? null;
+
+        return {
+          ...bundle,
+          cvs,
+          activeCv,
+          latestAnalysis: activeCv?.analysis ?? null,
+          careerScore: activeCv?.score ?? null,
+          scoreBreakdown: activeCv?.scoreBreakdown ?? null,
+        };
+      }),
+    );
+  }, []);
+
   const current = bundles.find((b) => b.profile.slug === currentSlug) ?? bundles[0];
 
   const summaries: ProfileSummary[] = bundles.map((b) => ({
@@ -229,6 +294,9 @@ export function ProfileProvider({
         applyAnalysis,
         applyMentorTurn,
         removeConversation,
+        setActiveCv,
+        applySurvey,
+        applyProfile,
       }}
     >
       {children}

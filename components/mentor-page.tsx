@@ -91,7 +91,7 @@ export function MentorPage() {
   const profileId = current.profile.id;
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [draftMode, setDraftMode] = useState(false);
+  const [draftMode, setDraftMode] = useState(true);
   const [inputValue, setInputValue] = useState("");
   const [pendingTurn, setPendingTurn] = useState<PendingTurn | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -105,7 +105,7 @@ export function MentorPage() {
   // draft, or in-flight bubble from another profile never leaks across.
   useEffect(() => {
     setSelectedId(null);
-    setDraftMode(false);
+    setDraftMode(true);
     setPendingTurn(null);
     setInputValue("");
   }, [profileId]);

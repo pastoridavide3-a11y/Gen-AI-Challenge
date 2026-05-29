@@ -8,7 +8,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ChevronDown, Check } from "lucide-react";
+import { MoreHorizontal, Check } from "lucide-react";
 
 export function Header() {
   const { current, setCurrentSlug, summaries } = useProfile();
@@ -22,17 +22,8 @@ export function Header() {
 
       {/* Profile Switcher */}
       <DropdownMenu>
-        <DropdownMenuTrigger className="flex items-center gap-3 rounded-lg border border-border bg-background px-3 py-2 text-sm transition-colors hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
-            {profile.avatar}
-          </div>
-          <div className="text-left">
-            <div className="font-medium text-foreground">{profile.name}</div>
-            <div className="text-xs text-muted-foreground">
-              {profile.university}
-            </div>
-          </div>
-          <ChevronDown className="h-4 w-4 text-muted-foreground" />
+        <DropdownMenuTrigger className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2">
+          <MoreHorizontal className="h-4 w-4" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-64">
           <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">

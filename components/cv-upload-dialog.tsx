@@ -124,9 +124,6 @@ export function CvUploadDialog({
   );
   const [saving, setSaving] = useState(false);
 
-  const nextVersion =
-    current.cvs.reduce((max, c) => Math.max(max, c.cv.version), 0) + 1;
-
   // Immutable nested updates: clone, mutate, set.
   const update = (mutator: (d: ParsedCv) => void) =>
     setDraft((prev) => {
@@ -189,7 +186,7 @@ export function CvUploadDialog({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Salvataggio non riuscito.");
 
-      toast.success(`CV v${data.cv.version} salvato.`);
+      toast.success("CV caricato con successo.");
       onOpenChange(false);
       reset();
       router.refresh();
@@ -271,7 +268,7 @@ export function CvUploadDialog({
         <DialogHeader className="border-b p-6">
           <DialogTitle>Rivedi i dati estratti</DialogTitle>
           <DialogDescription>
-            Correggi ciò che serve prima di salvare. Diventerà il CV v{nextVersion}.
+            Correggi ciò che serve prima di salvare. Diventerà il tuo CV attivo.
           </DialogDescription>
         </DialogHeader>
 

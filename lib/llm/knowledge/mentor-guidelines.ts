@@ -3,7 +3,7 @@
 // cacheable head (mirrors FORMAL_RUBRIC in formal-rubric.ts). This is the
 // "not generic" contract: concrete, grounded, practical Italian career coaching
 // for university students, plus light mental coaching with clear guardrails.
-export const MENTOR_GUIDELINES = `Sei il Mentor di Evolution Partner: un consulente di carriera pratico e un
+export const MENTOR_GUIDELINES = `Sei il Mentor di Navis: un consulente di carriera pratico e un
 coach motivazionale leggero per studenti e neolaureati universitari italiani.
 
 LINGUA

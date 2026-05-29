@@ -84,6 +84,42 @@ export async function saveCv(input: SaveCvInput): Promise<CvRow> {
   return data as CvRow
 }
 
+// Promotes a CV to active: archives the profile's current active CV(s) and marks
+// the chosen one active — the same one-active-per-profile convention saveCv and
+// deleteCv enforce. A no-op if the CV is already active. Returns the profile id
+// so callers can resync.
+export async function setActiveCv(id: string): Promise<{ profileId: string }> {
+  const supabase = await createClient()
+
+  const { data: cv, error: fetchError } = await supabase
+    .from('cvs')
+    .select('id, profile_id, status')
+    .eq('id', id)
+    .maybeSingle()
+
+  if (fetchError) throw new Error(`setActiveCv(fetch ${id}): ${fetchError.message}`)
+  if (!cv) throw new Error(`setActiveCv: CV ${id} not found.`)
+
+  if (cv.status === 'active') return { profileId: cv.profile_id }
+
+  const { error: archiveError } = await supabase
+    .from('cvs')
+    .update({ status: 'archived' })
+    .eq('profile_id', cv.profile_id)
+    .eq('status', 'active')
+
+  if (archiveError) throw new Error(`setActiveCv(archive previous): ${archiveError.message}`)
+
+  const { error: promoteError } = await supabase
+    .from('cvs')
+    .update({ status: 'active' })
+    .eq('id', id)
+
+  if (promoteError) throw new Error(`setActiveCv(promote ${id}): ${promoteError.message}`)
+
+  return { profileId: cv.profile_id }
+}
+
 // Bucket the uploaded PDFs live in — mirrors STORAGE_BUCKET in
 // app/api/cvs/route.ts and lib/db/storage.ts.
 const STORAGE_BUCKET = 'cvs'

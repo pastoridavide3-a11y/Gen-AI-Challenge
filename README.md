@@ -1,4 +1,4 @@
-# Evolution Partner
+# Navis
 
 NTT Data hackathon prototype — a web platform that uses LLMs to help
 university students navigate their career (CV analysis, gap analysis,

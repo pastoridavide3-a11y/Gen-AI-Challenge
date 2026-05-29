@@ -1,4 +1,4 @@
-# Evolution Partner
+# Navis
 
 NTT Data hackathon prototype. Runs locally on the developer's laptop during
 the pitch, with a pre-recorded video backup.

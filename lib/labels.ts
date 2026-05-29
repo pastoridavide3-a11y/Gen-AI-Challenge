@@ -18,30 +18,30 @@ export const TARGET_ROLE_LABELS: Record<TargetRole, string> = {
 
 export const INDUSTRY_LABELS: Record<Industry, string> = {
   tech: 'Tech',
-  finance: 'Finance',
-  consulting: 'Consulting',
-  marketing_advertising: 'Marketing & Advertising',
-  manufacturing: 'Manufacturing',
-  energy: 'Energy',
-  healthcare: 'Healthcare',
+  finance: 'Finanza',
+  consulting: 'Consulenza',
+  marketing_advertising: 'Marketing & Pubblicità',
+  manufacturing: 'Manifattura',
+  energy: 'Energia',
+  healthcare: 'Sanità',
   retail_ecommerce: 'Retail & E-commerce',
-  luxury: 'Luxury',
-  fashion: 'Fashion',
-  food_beverage: 'Food & Beverage',
+  luxury: 'Lusso',
+  fashion: 'Moda',
+  food_beverage: 'Alimentare & Bevande',
 }
 
 export const COMPANY_SIZE_LABELS: Record<CompanySize, string> = {
   startup: 'Startup',
   scale_up: 'Scale-up',
-  large_enterprise: 'Large Enterprise',
-  consulting_firm: 'Consulting Firm',
-  agency: 'Agency',
+  large_enterprise: 'Grande azienda',
+  consulting_firm: 'Studio di consulenza',
+  agency: 'Agenzia',
 }
 
 export const WORK_STYLE_LABELS: Record<WorkStyle, string> = {
-  remote: 'Remote',
-  hybrid: 'Hybrid',
-  onsite: 'On-site',
+  remote: 'Da remoto',
+  hybrid: 'Ibrido',
+  onsite: 'In sede',
 }
 
 export function targetRoleLabel(role: TargetRole | null): string {

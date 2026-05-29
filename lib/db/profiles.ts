@@ -35,3 +35,18 @@ export async function getProfileById(id: string): Promise<ProfileRow | null> {
   if (error) throw new Error(`getProfileById(${id}): ${error.message}`)
   return (data as ProfileRow | null) ?? null
 }
+
+export type ProfileEducationUpdate = {
+  university: string | null
+  course: string | null
+  year: string | null
+}
+
+export async function updateProfileEducation(
+  id: string,
+  fields: ProfileEducationUpdate,
+): Promise<void> {
+  const supabase = await createClient()
+  const { error } = await supabase.from('profiles').update(fields).eq('id', id)
+  if (error) throw new Error(`updateProfileEducation(${id}): ${error.message}`)
+}
